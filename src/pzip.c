@@ -1,5 +1,3 @@
-
-   
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -48,7 +46,7 @@ static void * countChars(void *arg){
 	}
 
 	temp_cfreq[currChar - 97] += count;  
-	thread_arr[tn].z_chars[thread_arr[tn].z_char_n].character = c;
+	thread_arr[tn].z_chars[thread_arr[tn].z_char_n].character = currChar;
 	thread_arr[tn].z_chars[thread_arr[tn].z_char_n].occurence = count; 
 	thread_arr[tn].z_char_n +=1; 
 	pthread_barrier_wait(&barrier);
@@ -64,7 +62,7 @@ static void * countChars(void *arg){
 	}
 
 	// lock mutex
-	for(int i = 0; i <  26; ++i){
+	for(int i = 0; i <  26; ++i) {
 		if(temp_cfreq[i] != 0){
 			if(pthread_mutex_lock(&lock[i])){
 				fprintf(stderr,"Error: mutex locking");
@@ -111,12 +109,13 @@ void pzip(int n_threads, char *input_chars, int input_chars_size,
 	str = input_chars;
 
 	// initialize barrier
-	if(pthread_barrier_init (&barrier, NULL, n_threads)){
+	if(pthread_barrier_init (&barrier, NULL, n_threads)) {
 		fprintf(stderr,"Error: barier initialization");
 		exit(-1);
 	}
+
 	// initialize mutex for each char
-	for(int i = 0; i < 26; ++i){
+	for(int i = 0; i < 26; ++i) {
 		if(pthread_mutex_init(&lock[i],NULL)){
 			fprintf(stderr,"Error: mutex initialization"); 
 			exit(-1);
@@ -127,8 +126,10 @@ void pzip(int n_threads, char *input_chars, int input_chars_size,
 	thread_count = n_threads; 
 	pthread_t threads[n_threads]; 
 	str_n = input_chars_size/n_threads; 
-	thread_arr = (threader *)malloc(n_threads*sizeof(threader)); 
-	for(long i = 0; i <  n_threads; ++i){
+	thread_arr = (threader *)malloc(n_threads*sizeof(threader));
+
+	// Create threads
+	for(long i = 0; i <  n_threads; ++i) {
 		thread_arr[i].z_chars = (struct zipped_char *) malloc(str_n*sizeof(struct zipped_char));
 		
 		if(pthread_create(&threads[i],NULL,*countChars,(void *)i)){
@@ -136,25 +137,31 @@ void pzip(int n_threads, char *input_chars, int input_chars_size,
 			exit(-1); 
 		} 
 	}
-	for(int i = 0; i < n_threads; ++i){
+
+	// Join all threads
+	for(int i = 0; i < n_threads; ++i) {
 		if(pthread_join(threads[i],&tret)){
 			fprintf(stderr,"Error: thread joining"); 
 			exit(-1);
 		}
 	}
-	if(pthread_barrier_destroy (&barrier)){
+
+	// Destroy marrier
+	if(pthread_barrier_destroy (&barrier)) {
 		fprintf(stderr,"Error: barrier destruction");
 		exit(-1);
 	} 
-	for(int i = 0; i < 26; ++i){
-		if(pthread_mutex_destroy(&lock[i])){
+
+	// Destroy mutex
+	for(int i = 0; i < 26; ++i) {
+		if(pthread_mutex_destroy(&lock[i])) {
 			fprintf(stderr,"Error: mutex destruction");
 			exit(-1);
 		}
 	}
 
 	*zipp_n = 0; 
-	for(int i = 0; i < thread_count; ++i){
+	for(int i = 0; i < thread_count; ++i) {
 		*zipp_n += thread_arr[i].z_char_n; 
 	}
 	
