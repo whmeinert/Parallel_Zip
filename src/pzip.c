@@ -10,75 +10,74 @@
 // thread struct
 typedef struct zipped_str {
 	struct zipped_char *z_chars;
-	int z_char_n; 
-}threader;
+	int z_char_n;
+} threader;
 
-// global variables 
-pthread_barrier_t barrier; 
+// global variables
+pthread_barrier_t barrier;
+pthread_mutex_t lock[26];
+threader * thread_arr;
+struct zipped_char *global_chars;
 int * glob_cfreq;
-threader * thread_arr; 
-struct zipped_char *global_chars; 
-pthread_mutex_t lock[26]; 
 int thread_count;
-int *zipp_n;
 int str_n;
+int *zipp_n;
 char * str;
 
-static void * countChars(void *arg){
-	int temp_cfreq[26] = {0};
-	long tn = (long)arg;
+static void * countChars(void *arg) {
+	int local_cfreq[26] = {0};
+	long thread_n = (long)arg;
 	char currChar;
 	int count = 1;
-	thread_arr[tn].z_char_n = 0;
+	thread_arr[thread_n].z_char_n = 0;
 
-	for(int i = str_n*tn; i < str_n*(tn+1)-1; ++i) {
-		currChar = str[i]; 
-		if(str[i] == str[i+1]){
-			count = count + 1; 
+	for (int i = str_n*thread_n; i < str_n*(thread_n+1)-1; ++i) {
+		currChar = str[i];
+		if (str[i] == str[i+1]) {
+			count = count + 1;
 		}
-		else{
-			temp_cfreq[currChar - 97] += count; 
-			thread_arr[tn].z_chars[thread_arr[tn].z_char_n].character = currChar;
-			thread_arr[tn].z_chars[thread_arr[tn].z_char_n].occurence = count; 
-			thread_arr[tn].z_char_n +=1; 
+		else {
+			local_cfreq[currChar - 97] += count;
+			thread_arr[thread_n].z_chars[thread_arr[thread_n].z_char_n].character = currChar;
+			thread_arr[thread_n].z_chars[thread_arr[thread_n].z_char_n].occurence = count;
+			thread_arr[thread_n].z_char_n +=1;
 			count = 1;
 		}
 	}
 
-	temp_cfreq[currChar - 97] += count;  
-	thread_arr[tn].z_chars[thread_arr[tn].z_char_n].character = currChar;
-	thread_arr[tn].z_chars[thread_arr[tn].z_char_n].occurence = count; 
-	thread_arr[tn].z_char_n +=1; 
+	local_cfreq[currChar - 97] += count;
+	thread_arr[thread_n].z_chars[thread_arr[thread_n].z_char_n].character = currChar;
+	thread_arr[thread_n].z_chars[thread_arr[thread_n].z_char_n].occurence = count;
+	thread_arr[thread_n].z_char_n +=1;
 	pthread_barrier_wait(&barrier);
 	int zchars_i = 0;
 
-	for(int i = 0; i < tn; ++i) {
+	for (int i = 0; i < thread_n; ++i) {
 		zchars_i += thread_arr[i].z_char_n;
 	}
 
-	for(int i = zchars_i; i < zchars_i + thread_arr[tn].z_char_n; ++i) {
-		global_chars[i].character = thread_arr[tn].z_chars[i - zchars_i].character;
-		global_chars[i].occurence = thread_arr[tn].z_chars[i - zchars_i].occurence;
+	for (int i = zchars_i; i < zchars_i + thread_arr[thread_n].z_char_n; ++i) {
+		global_chars[i].character = thread_arr[thread_n].z_chars[i - zchars_i].character;
+		global_chars[i].occurence = thread_arr[thread_n].z_chars[i - zchars_i].occurence;
 	}
 
 	// lock mutex
-	for(int i = 0; i <  26; ++i) {
-		if(temp_cfreq[i] != 0){
-			if(pthread_mutex_lock(&lock[i])){
+	for (int i = 0; i < 26; ++i) {
+		if (local_cfreq[i] != 0){
+			if (pthread_mutex_lock(&lock[i])) {
 				fprintf(stderr,"Error: mutex locking");
 				exit(-1);
 			}
-			glob_cfreq[i] += temp_cfreq[i];
+			glob_cfreq[i] += local_cfreq[i];
 
-			if(pthread_mutex_unlock(&lock[i])){
-				fprintf(stderr,"Error: mutex unlocking"); 
+			if (pthread_mutex_unlock(&lock[i])) {
+				fprintf(stderr,"Error: mutex unlocking");
 				exit(-1);
 			}
 		}
 	}
 
-	
-	free(thread_arr[tn].z_chars); 
+	free(thread_arr[thread_n].z_chars);
 	pthread_exit(NULL);
 }
 
@@ -105,65 +104,65 @@ void pzip(int n_threads, char *input_chars, int input_chars_size,
 	// define global variables
 	global_chars = zipped_chars;
 	glob_cfreq = char_frequency;
-	zipp_n = zipped_chars_count; 
+	zipp_n = zipped_chars_count;
 	str = input_chars;
 
 	// initialize barrier
-	if(pthread_barrier_init (&barrier, NULL, n_threads)) {
+	if (pthread_barrier_init (&barrier, NULL, n_threads)) {
 		fprintf(stderr,"Error: barier initialization");
 		exit(-1);
 	}
 
 	// initialize mutex for each char
-	for(int i = 0; i < 26; ++i) {
-		if(pthread_mutex_init(&lock[i],NULL)){
-			fprintf(stderr,"Error: mutex initialization"); 
+	for (int i = 0; i < 26; ++i) {
+		if (pthread_mutex_init(&lock[i],NULL)) {
+			fprintf(stderr,"Error: mutex initialization");
 			exit(-1);
 		}
 	}
-	void *tret; 
+	void *tret;
 
-	thread_count = n_threads; 
-	pthread_t threads[n_threads]; 
-	str_n = input_chars_size/n_threads; 
+	thread_count = n_threads;
+	pthread_t threads[n_threads];
+	str_n = input_chars_size/n_threads;
 	thread_arr = (threader *)malloc(n_threads*sizeof(threader));
 
 	// Create threads
-	for(long i = 0; i <  n_threads; ++i) {
+	for (long i = 0; i <  n_threads; ++i) {
 		thread_arr[i].z_chars = (struct zipped_char *) malloc(str_n*sizeof(struct zipped_char));
 		
-		if(pthread_create(&threads[i],NULL,*countChars,(void *)i)){
-			fprintf(stderr,"Error: thread creation"); 
-			exit(-1); 
-		} 
+		if (pthread_create(&threads[i],NULL,*countChars,(void *)i)) {
+			fprintf(stderr,"Error: thread creation");
+			exit(-1);
+		}
 	}
 
 	// Join all threads
-	for(int i = 0; i < n_threads; ++i) {
-		if(pthread_join(threads[i],&tret)){
-			fprintf(stderr,"Error: thread joining"); 
+	for (int i = 0; i < n_threads; ++i) {
+		if (pthread_join(threads[i],&tret)) {
+			fprintf(stderr,"Error: thread joining");
 			exit(-1);
 		}
 	}
 
 	// Destroy marrier
-	if(pthread_barrier_destroy (&barrier)) {
+	if (pthread_barrier_destroy (&barrier)) {
 		fprintf(stderr,"Error: barrier destruction");
 		exit(-1);
-	} 
+	}
 
 	// Destroy mutex
-	for(int i = 0; i < 26; ++i) {
-		if(pthread_mutex_destroy(&lock[i])) {
+	for (int i = 0; i < 26; ++i) {
+		if (pthread_mutex_destroy(&lock[i])) {
 			fprintf(stderr,"Error: mutex destruction");
 			exit(-1);
 		}
 	}
 
-	*zipp_n = 0; 
-	for(int i = 0; i < thread_count; ++i) {
-		*zipp_n += thread_arr[i].z_char_n; 
+	*zipp_n = 0;
+	for (int i = 0; i < thread_count; ++i) {
+		*zipp_n += thread_arr[i].z_char_n;
 	}
 	
-	free(thread_arr); 
+	free(thread_arr);
 }
